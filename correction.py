@@ -86,7 +86,136 @@ def error_noise(y_noise_probability, y_noise, duration_noise, fixations):
 
     return results
 
-# shift
+
+def slope_distortion(fixations, d_slope):
+
+    results = []
+
+    initial_x = fixations[0][0]
+
+    for fix in fixations:
+
+        x, y, duration = fix[0], fix[1], fix[2]
+
+        results.append([x, y + (x - initial_x)*d_slope, duration])
+
+    return results
+
+
+def shift_distortion(fixations, d_shift):
+
+    results = []
+
+    initial_y = fixations[0][1]
+
+    for fix in fixations:
+
+        x, y, duration = fix[0], fix[1], fix[2]
+
+        results.append([x, y + (y - initial_y)*d_shift, duration])
+
+    return results
+
+
+def within_line_regression(fixations, reg_prob):
+
+    rng = np.random.default_rng()
+
+    results = []
+
+    n_fix = len(fixations)
+    fix_index = 0
+    line_start = 0
+    prev_x = 0
+
+    while fix_index < n_fix:
+
+        x, y, duration = (fixations[fix_index][0],
+                          fixations[fix_index][1],
+                          fixations[fix_index][2])
+
+        # check for new line
+        if x < prev_x:
+            line_start = fix_index
+
+        # roll dice on regression
+        if random.random() < reg_prob:
+
+            try:
+                # choose how far to regress
+                reg_index = int(rng.triangular(line_start, fix_index,
+                                               fix_index, 1)[0])
+
+                # add fixations for regression
+                results.extend(fixations[reg_index:fix_index])
+
+            # triangular throws a ValueError if left == right
+            except ValueError:
+
+                # regression at first fixation in line: do nothing
+                pass
+
+        # add the current fixation
+        results.append(fixations[fix_index])
+
+        prev_x = x
+        fix_index += 1
+
+    return results
+
+
+def between_line_regression(fixations, reg_prob):
+
+    rng = np.random.default_rng()
+
+    results = []
+
+    n_fix = len(fixations)
+    fix_index = 0
+    n_lines = 0
+    line_start = 0
+    line_to_indices = {}
+    prev_x = 0
+
+    while fix_index < n_fix:
+
+        x, y, duration = (fixations[fix_index][0],
+                          fixations[fix_index][1],
+                          fixations[fix_index][2])
+
+        # check for new line
+        if x < prev_x:
+
+            # record (start, end) indices for the previous line
+            line_to_indices[n_lines] = np.arange(line_start, fix_index, 1)
+
+            n_lines += 1  # update line counter
+
+            line_start = fix_index  # update line starting index
+
+        if random.random() < reg_prob:
+
+            try:
+                # choose how far to regress
+                line = int(rng.triangular(0, n_lines, n_lines, 1)[0])
+
+                indices = line_to_indices[line]
+
+                selection = rng.choice(indices, 2, replace=False)
+
+                selection.sort()
+
+                results.extend(fixations[selection[0]:selection[1]])
+
+            except ValueError:
+                pass
+
+        results.append(fixations[fix_index])
+
+        prev_x = x
+        fix_index += 1
+
+    return results
 
 
 def draw_fixation(Image_file, fixations):
